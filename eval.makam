@@ -74,8 +74,9 @@ introlam   : hint.
 inapp    : list rhr -> list rhr -> rhr.
 leftapp  : list rhr -> rhr.
 rightapp : list rhr -> rhr.
-inlam    : list rhr -> rhr.
+inlam    : (term -> list rhr) -> rhr.
 
+weird      : rhr.
 npluszero  : term -> rhr.
 betareduce : term -> term -> rhr.
 
@@ -99,6 +100,8 @@ match S M Rhr :- not(refl.isunif S), applyrw S S1 Rhr1,
 (* match completely structurally *)
 (* essentially, we are replicating unification *)
 (* but with the ability to give hints *)
+matchstruct X Y nil
+  :- eq_nounif X Y. (* fast check for equality *)
 matchstruct X E (cons (intro H) nil)
   :- refl.isunif X, matchhint E H.
 matchstruct (muurok _ S) M Rhr
@@ -107,7 +110,7 @@ matchstruct (const T) (const T) nil.
 matchstruct (app S1 S2) (app M1 M2) (cons (inapp Rhr1 Rhr2) nil)
   :- matchstruct S1 M1 Rhr1, matchstruct S2 M2 Rhr2.
 matchstruct (lam T S) (lam T M) (cons (inlam Rhr) nil)
-  :- (x:term -> matchstruct (S x) (M x) Rhr).
+  :- (x:term -> matchstruct (S x) (M x) (Rhr x)).
 
 (* add rewriting rules for each thing we would like to have *)
 (* remember that the rhs is always the most simplified one *)
@@ -117,8 +120,8 @@ applyrw (app R1 R2) (app N1 R2) (cons (leftapp Rhr) nil)
   :- applyrw R1 N1 Rhr.
 applyrw (app R1 R2) (app R1 N2) (cons (rightapp Rhr) nil)
   :- applyrw R2 N2 Rhr.
-applyrw (lam T R) (lam T N) (cons (inlam Rhr) nil)
-  :- (x:term -> applyrw (R x) (N x) Rhr).
+applyrw (lam T R) (lam T P) (cons (inlam Rhr) nil)
+  :- (x:term -> applyrw (R x) (P x) (Rhr x)).
 
 compare : term -> tyscheme -> term -> list rhr -> prop.
 compare Student ModelTy Model Rhr
