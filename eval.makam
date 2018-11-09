@@ -3,10 +3,6 @@ arr  : typ -> typ -> typ.
 int  : typ.
 list : typ -> typ.
 
-tyscheme : type.
-forall : (typ -> tyscheme) -> tyscheme.
-done   : typ -> tyscheme.
-
 constant : type.
 zero : constant.
 one : constant.
@@ -41,6 +37,16 @@ typeof (const X) R (const X) :- typeconst X R.
 typeof (muur T) R (muurok R E) :- typeof T R E.
 typeof (muur T) Exp (muurbad Exp Inf E) :- typeof T Inf E, not(eq Exp Inf).
 
+tyscheme : type.
+forall : (typ -> tyscheme) -> tyscheme.
+done   : typ -> tyscheme.
+
+tyschemeof : term -> tyscheme -> term -> prop.
+tyschemeof T R E
+  :- not(refl.isunif R), eq R (forall R'), (a:typ -> tyschemeof T (R' a) E).
+tyschemeof T (done R) E
+  :- typeof T R E.
+
 eval : term -> term -> prop.
 eval X Y :- refl.isunif(X).
 eval (const X) (const X).
@@ -50,5 +56,70 @@ eval (app E1 E2) (app E1b E2b) :- eval E1 E1b, not(eq E1b (lam _ _)), eval E2 E2
 eval (muurok _ E) Eb :- eval E Eb.
 eval (muurbad Exp Inf E) (muurbad Exp Inf Eb) :- eval E Eb.
 
-typeval : term -> typ -> term -> prop.
-typeval Orig T Final :- typeof Orig T Elab, eval Elab Final.
+typeval : term -> tyscheme -> term -> prop.
+typeval Orig T Final :- tyschemeof Orig T Elab, eval Elab Final.
+
+(* matching algorithm *)
+(* we always assume the second argument is fully known *)
+
+rhr : type. (* rewriting, hints, reparations *)
+hint : type.
+
+intro : hint -> rhr.
+introid    : hint.
+introconst : constant -> hint.
+introapp   : hint.
+introlam   : hint.
+
+inapp    : list rhr -> list rhr -> rhr.
+leftapp  : list rhr -> rhr.
+rightapp : list rhr -> rhr.
+inlam    : list rhr -> rhr.
+
+npluszero  : term -> rhr.
+betareduce : term -> term -> rhr.
+
+matchhint : term -> hint -> prop.
+(* better hints for well-known cases *)
+matchhint (lam _ (fun x => x)) introid.
+matchhint (const T) (introconst T).
+matchhint (app _ _) introapp.
+matchhint (lam _ _) introlam.
+
+match : term -> term -> list rhr -> prop.
+matchstruct : term -> term -> list rhr -> prop.
+applyrw : term -> term -> list rhr -> prop.
+
+(* case one, give hints -- no repairs yet *)
+match S M Rhr :- matchstruct S M Rhr.
+(* case two, rewrite *)
+match S M Rhr :- not(refl.isunif S), applyrw S S1 Rhr1,
+                 match S1 M Rhr2, append Rhr1 Rhr2 Rhr.
+
+(* match completely structurally *)
+(* essentially, we are replicating unification *)
+(* but with the ability to give hints *)
+matchstruct X E (cons (intro H) nil)
+  :- refl.isunif X, matchhint E H.
+matchstruct (muurok _ S) M Rhr
+  :- matchstruct S M Rhr.
+matchstruct (const T) (const T) nil.
+matchstruct (app S1 S2) (app M1 M2) (cons (inapp Rhr1 Rhr2) nil)
+  :- matchstruct S1 M1 Rhr1, matchstruct S2 M2 Rhr2.
+matchstruct (lam T S) (lam T M) (cons (inlam Rhr) nil)
+  :- (x:term -> matchstruct (S x) (M x) Rhr).
+
+(* add rewriting rules for each thing we would like to have *)
+(* remember that the rhs is always the most simplified one *)
+applyrw (app (app (const plus) X) (const zero)) X (cons (npluszero X) nil).
+applyrw (app (lam T F) X) (F X) (cons (betareduce (lam T F) X) nil).
+applyrw (app R1 R2) (app N1 R2) (cons (leftapp Rhr) nil)
+  :- applyrw R1 N1 Rhr.
+applyrw (app R1 R2) (app R1 N2) (cons (rightapp Rhr) nil)
+  :- applyrw R2 N2 Rhr.
+applyrw (lam T R) (lam T N) (cons (inlam Rhr) nil)
+  :- (x:term -> applyrw (R x) (N x) Rhr).
+
+compare : term -> tyscheme -> term -> list rhr -> prop.
+compare Student ModelTy Model Rhr
+  :- tyschemeof Student ModelTy Elab, match Elab Model Rhr.
