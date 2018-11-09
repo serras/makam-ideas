@@ -1,0 +1,54 @@
+typ  : type.
+arr  : typ -> typ -> typ.
+int  : typ.
+list : typ -> typ.
+
+tyscheme : type.
+forall : (typ -> tyscheme) -> tyscheme.
+done   : typ -> tyscheme.
+
+constant : type.
+zero : constant.
+one : constant.
+plus : constant.
+map : constant.
+
+typeconst : constant -> typ -> prop.
+typeconst zero int.
+typeconst one int.
+typeconst plus (arr int (arr int int)).
+(* polymorphism by variables *)
+typeconst map (arr (arr A B) (arr (list A) (list B))).
+
+term : type.
+const : constant -> term.
+lam   : typ -> (term -> term) -> term.
+app   : term -> term -> term.
+(* possibly inconsistent holes *)
+muur  : term -> term.
+(* elaborated holes *)
+muurok  : typ -> term -> term.
+muurbad : typ -> typ -> term -> term.
+
+typeof  : term -> typ -> term -> prop.
+typeof X R X :- refl.isunif X.
+typeof (app T1 T2) R (app E1 E2)
+  :- typeof T1 (arr A R) E1, typeof T2 A E2.
+typeof (lam A T) (arr A R) (lam A E)
+  :- (x:term -> typeof x A x -> typeof (T x) R (E x)).
+typeof (const X) R (const X) :- typeconst X R.
+(* terms with a wall around *)
+typeof (muur T) R (muurok R E) :- typeof T R E.
+typeof (muur T) Exp (muurbad Exp Inf E) :- typeof T Inf E, not(eq Exp Inf).
+
+eval : term -> term -> prop.
+eval X Y :- refl.isunif(X).
+eval (const X) (const X).
+eval (lam A Body) (lam A Body).
+eval (app E1 E2) E :- eval E1 (lam _ Body), eval E2 Arg, eval (Body Arg) E.
+eval (app E1 E2) (app E1b E2b) :- eval E1 E1b, not(eq E1b (lam _ _)), eval E2 E2b.
+eval (muurok _ E) Eb :- eval E Eb.
+eval (muurbad Exp Inf E) (muurbad Exp Inf Eb) :- eval E Eb.
+
+typeval : term -> typ -> term -> prop.
+typeval Orig T Final :- typeof Orig T Elab, eval Elab Final.
