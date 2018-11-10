@@ -21,10 +21,20 @@ const : constant -> term.
 lam   : typ -> (term -> term) -> term.
 app   : term -> term -> term.
 (* possibly inconsistent holes *)
-muur  : term -> term.
-(* elaborated holes *)
-muurok  : typ -> term -> term.
+muurty  : typ -> term -> term. (* typ should always be a var *)
+(* definitely inconsistent holes *)
 muurbad : typ -> typ -> term -> term.
+
+removemuur : term -> term -> prop.
+removemuur (const X) (const X).
+removemuur (app X1 X2) (app R1 R2)
+  :- removemuur X1 R1, removemuur X2 R2.
+removemuur (lam T X) (lam T R)
+  :- (x:term -> removemuur (X x) (R x)).
+removemuur (muurty T X) R
+  :- removemuur X R.
+removemuur (muurbad T1 T2 X) (muurbad T1 T2 R)
+  :- removemuur X R.
 
 typeof  : term -> typ -> term -> prop.
 typeof X R X :- refl.isunif X.
@@ -34,8 +44,8 @@ typeof (lam A T) (arr A R) (lam A E)
   :- (x:term -> typeof x A x -> typeof (T x) R (E x)).
 typeof (const X) R (const X) :- typeconst X R.
 (* terms with a wall around *)
-typeof (muur T) R (muurok R E) :- typeof T R E.
-typeof (muur T) Exp (muurbad Exp Inf E) :- typeof T Inf E, not(eq Exp Inf).
+typeof (muurty R T) R (muurty R E) :- typeof T R E.
+typeof (muurty _ T) Exp (muurbad Exp Inf E) :- typeof T Inf E, not(eq Exp Inf).
 
 tyscheme : type.
 forall : (typ -> tyscheme) -> tyscheme.
@@ -53,7 +63,7 @@ eval (const X) (const X).
 eval (lam A Body) (lam A Body).
 eval (app E1 E2) E :- eval E1 (lam _ Body), eval E2 Arg, eval (Body Arg) E.
 eval (app E1 E2) (app E1b E2b) :- eval E1 E1b, not(eq E1b (lam _ _)), eval E2 E2b.
-eval (muurok _ E) Eb :- eval E Eb.
+eval (muurty _ E) Eb :- eval E Eb.
 eval (muurbad Exp Inf E) (muurbad Exp Inf Eb) :- eval E Eb.
 
 typeval : term -> tyscheme -> term -> prop.
@@ -104,8 +114,6 @@ matchstruct X Y nil
   :- eq_nounif X Y. (* fast check for equality *)
 matchstruct X E (cons (intro H) nil)
   :- refl.isunif X, matchhint E H.
-matchstruct (muurok _ S) M Rhr
-  :- matchstruct S M Rhr.
 matchstruct (const T) (const T) nil.
 matchstruct (app S1 S2) (app M1 M2) (cons (inapp Rhr1 Rhr2) nil)
   :- matchstruct S1 M1 Rhr1, matchstruct S2 M2 Rhr2.
@@ -125,4 +133,6 @@ applyrw (lam T R) (lam T P) (cons (inlam Rhr) nil)
 
 compare : term -> tyscheme -> term -> list rhr -> prop.
 compare Student ModelTy Model Rhr
-  :- tyschemeof Student ModelTy Elab, match Elab Model Rhr.
+  :- tyschemeof Student ModelTy Elab,
+     removemuur Elab Elab2,
+     match Elab2 Model Rhr.
