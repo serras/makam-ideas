@@ -1,0 +1,52 @@
+%open syntax.
+
+preterm : type.
+listpreterm : type.
+prevar : string -> preterm.
+prelam : string -> preterm -> preterm.
+preapp : listpreterm -> preterm.
+precons : preterm -> listpreterm -> listpreterm.
+preone  : preterm -> listpreterm.
+
+preterm, basepreterm : syntax preterm.
+listbasepreterm : syntax listpreterm.
+`(syntax_rules <<
+basepreterm ->
+    { "(" <preterm> ")"}
+  / prelam { "lambda" <makam.ident> ":" <preterm> }
+  / prevar { <makam.ident> }
+
+preterm ->
+    preapp { <listbasepreterm> }
+
+listbasepreterm ->
+    precons { <basepreterm> <listbasepreterm> }
+  / preone  { <basepreterm> }
+>>).
+`(syntax.def_toplevel_js preterm).
+
+term : type.
+k : string -> term.
+lam : (term -> term) -> term.
+app : term -> list term -> term.
+
+to_term  : preterm -> term -> prop.
+to_terms : listpreterm -> list term -> prop.
+bound    : string  -> term -> prop.
+to_term (prevar X) V :- bound X V.
+to_term (prevar X) (k X) :- not(bound X V).
+to_term (prelam X B) (lam (fun x => E x))
+  :- (x:term -> bound X x -> to_term B (E x)).
+to_term (preapp (preone H)) H'
+  :- to_term H H'.
+to_term (preapp (precons H R)) (app H' R')
+  :- to_term H H', to_terms R R'.
+
+to_terms (precons T Ts) (T' :: Ts')
+  :- to_term T T', to_terms Ts Ts'.
+to_terms (preone T) (T' :: [])
+  :- to_term T T'.
+
+parse : string -> term -> prop.
+parse Input Lam :- syntax.run preterm Input Pre, to_term Pre Lam.
+

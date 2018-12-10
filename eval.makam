@@ -101,6 +101,10 @@ applyrw (app R1 R2) (app R1 N2) (cons (rightapp Rr) nil)
 applyrw (lam T R) (lam T P) (cons (inlam Rr) nil)
   :- (x:term -> applyrw (R x) (P x) (Rr x)).
 
+(* intro some rewritings which look at the RHS *)
+(* some of them will be within a muurbad *)
+(* some others won't, e.g., you missed a pattern match *)
+
 compare : term -> tyscheme -> term -> list rr -> prop.
 compare Student ModelTy Model Rr
   :- tyschemeof Student ModelTy Elab,

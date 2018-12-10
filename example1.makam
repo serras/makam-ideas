@@ -1,0 +1,82 @@
+typ  : type.
+arr  : typ -> typ -> typ.
+int  : typ.
+list : typ -> typ.
+
+tyscheme : type.
+forall : (typ -> tyscheme) -> tyscheme.
+done   : typ -> tyscheme.
+
+constant : type.
+zero : constant.
+one : constant.
+plus : constant.
+map : constant.
+
+typeconst : constant -> typ -> prop.
+typeconst zero int.
+typeconst one int.
+typeconst plus (arr int (arr int int)).
+(* polymorphism by variables *)
+typeconst map (arr (arr A B) (arr (list A) (list B))).
+
+term : type.
+lam   : typ -> (term -> term) -> term.
+app   : term -> term -> term.
+annot : typ -> term -> term.
+hole  : term -> term. (* possibly inconsistent holes *)
+const : constant -> term.
+
+typeof  : term -> typ -> term -> prop.
+typeof (annot T E) T :- refl.isunif E.
+typeof (annot T E) T :- not(refl.isunif E), typeof E T.
+typeof (app E1 E2) R :- typeof E1 (arr A R), typeof E2 A.
+typeof (lam T E) (arr T R) :- (x:term -> typeof x T -> typeof (E x) R).
+typeof (const X) T :- typeconst X T.
+typeof (hole E) T :- typeof E T.
+typeof (hole E) T :- typeof E R, not(eq R T), (* add to list *)
+
+tyschemeof : term -> tyscheme -> prop.
+tyschemeof X T :- not(refl.isunif T), eq T (forall T'), (a:typ -> tyschemeof X (T' a)).
+tyschemeof X (done T) :- typeof X T.
+
+rewriting : type.
+structlam  : list rewriting -> rewriting.
+structapp  : list rewriting -> list rewriting -> rewriting.
+npluszero  : term -> rewriting.
+betareduce : term -> term -> rewriting.
+
+eqterms : term -> term -> list rewriting -> prop.
+eqtermsstruct : term -> term -> list rewriting -> prop.
+eqtermsrw : term -> term -> list rewriting -> prop.
+
+eqterms X X nil.
+(* simplification using rewriting rules *)
+eqterms X Y R :- not(refl.isunif X), not(eq X Y), eqtermsrw X Y R.
+(* structural simplification *)
+eqterms X Y R :- not(refl.isunif X), not (eq X Y), eqtermsstruct X Y R.
+(* simplification to intermediate form *)
+eqterms X Y RR :- not(refl.isunif X), not (eq X Y),
+                  eqterms X Z R1, not (eq X Z), eqterms Z Y R2,
+                  append R1 R2 RR.
+
+(* add rewriting rules for each thing we would like to have *)
+(* remember that the rhs is always the most simplified one *)
+eqtermsrw (app (app (const plus) X) (const zero)) Y (cons (npluszero X) R)
+  :- eqterms X Y R.
+eqtermsrw (app (lam T F) X) Y (cons (betareduce (lam T F) X) R)
+  :- eqterms (F X) Y R.
+
+(* this tells you the next step *)
+eqterms X (case ...) (introducepatmatc) :- refl.isunif X.
+
+(* structural simplification *)
+eqtermsstruct (annot T E) Y R :- eqterms E Y R.
+eqtermsstruct (lam T X) (lam T Y) (cons (structlam R) nil)
+  :- (x:term -> eqterms (X x) (Y x) R).
+eqtermsstruct (app X1 X2) (app Y1 Y2) (cons (structapp R1 R2) nil)
+  :- eqterms X1 Y1 R1, eqterms X2 Y2 R2.
+
+equalize : term -> tyscheme -> term -> list rewriting -> prop.
+equalize Student ModelTy Model R
+  :- tyschemeof Student ModelTy, eqterms Student Model R.
