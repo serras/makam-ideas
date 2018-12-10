@@ -30,7 +30,11 @@ etaexpand  : term -> r.
 npluszero  : term -> r.
 defn_id : r.
 
-match : term -> term -> list r -> prop.
+status : type.
+st : r -> term -> term -> status.
+
+match  : term -> term -> list r -> prop.
+matchS : term -> term -> list status -> prop.
 onestep : term -> term -> term -> term -> r -> prop.
 onesteplist : list term -> list term -> list term -> list term -> r -> prop.
 onestepany : term -> term -> r -> prop.
@@ -41,6 +45,13 @@ match S M (R :: Rs)
      onestep S S1 M M1 R, 
      normalize S1 S2, normalize M1 M2,
      match S2 M2 Rs.
+
+matchS X X [].
+matchS S M (st R S2 M2 :: Rs)
+  :- not(refl.isunif S), not(eq S M), 
+     onestep S S1 M M1 R, 
+     normalize S1 S2, normalize M1 M2,
+     matchS S2 M2 Rs.
 
 onestep (app (k "+") (k "0" :: X :: [])) X M M (npluszero X).
 onestep (app (lam F) (X :: [])) (F X) M M (betareduce F X).
