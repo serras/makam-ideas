@@ -29,6 +29,8 @@ etaexpand  : term -> r.
 (* real rewritings *)
 npluszero  : term -> r.
 defn_id : r.
+(* mistakes *)
+wrong_parens : r.
 
 status : type.
 st : r -> term -> term -> status.
@@ -65,6 +67,11 @@ onestep S S' M M R :- onestepany S S' R.
 onestep S S M M' R :- onestepany M M' R.
 
 onestepany (app (k "id") (X :: Rest)) (app X Rest) defn_id.
+
+(* mistakes *)
+(* wrong parens -> `x y z` turns into `x (y z)` *)
+onestep (app F (G :: Args)) (app F (app G Args :: []))
+        (app F' (A' :: [])) (app F' (A' :: [])) wrong_parens.
 
 (* structural, only go if rewrite doesn't work *)
 onestep (lam S) (lam S') (lam M) (lam M') (inlam R)

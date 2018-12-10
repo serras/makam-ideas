@@ -1,0 +1,2 @@
+matchS (lam (fun x => app X (k "0" :: x :: []))) (k "id") R ?
+matchS (lam (fun x => app (k "map") (k "replicate" :: k "2" :: []))) (lam (fun x => app (k "map") (app (k "replicate") (k "2" :: []) :: []) ) ) R ?
