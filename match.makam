@@ -1,0 +1,114 @@
+%open syntax.
+
+term : type.
+k   : string -> term.
+lam : (term -> term) -> term.
+app : term -> list term -> term.
+
+normalize : term -> term -> prop.
+normalize (k X) (k Y) :- eq X Y.
+normalize (lam Body) (lam BodyN)
+  :- (x:term -> normalize x x -> normalize (Body x) (BodyN x)).
+normalize (app Fun []) FunN
+  :- normalize Fun FunN.
+normalize (app Head Args) (app HeadN ArgsN)
+  :- normalize Head HeadN, map normalize Args ArgsN.
+
+parse : string -> term -> prop.
+(* defined later *)
+
+r : type.
+
+(* structural rewritings *)
+inappl : r -> r.
+inappr : r -> r.
+inlam  : (term -> r) -> r.
+(* semi-real rewritings *)
+betareduce : (term -> term) -> term -> r.
+etaexpand  : term -> r.
+(* real rewritings *)
+npluszero  : term -> r.
+defn_id : r.
+
+match : term -> term -> list r -> prop.
+onestep : term -> term -> term -> term -> r -> prop.
+onesteplist : list term -> list term -> list term -> list term -> r -> prop.
+onestepany : term -> term -> r -> prop.
+
+match X X [].
+match S M (R :: Rs)
+  :- not(refl.isunif S), not(eq S M), 
+     onestep S S1 M M1 R, 
+     normalize S1 S2, normalize M1 M2,
+     match S2 M2 Rs.
+
+onestep (app (k "+") (k "0" :: X :: [])) X M M (npluszero X).
+onestep (app (lam F) (X :: [])) (F X) M M (betareduce F X).
+onestep (app (lam F) (X :: Rest)) (app (F X) Rest) M M (betareduce F X)
+  :- not(eq Rest []).
+onestep (lam F) (lam F) M (lam (fun x => app M (x :: []))) (etaexpand M)
+  :- not(eq M (lam _)).
+
+(* rules which apply in any side *)
+onestep S S' M M R :- onestepany S S' R.
+onestep S S M M' R :- onestepany M M' R.
+
+onestepany (app (k "id") (X :: Rest)) (app X Rest) defn_id.
+
+(* structural, only go if rewrite doesn't work *)
+onestep (lam S) (lam S') (lam M) (lam M') (inlam R)
+  :- (x:term -> onestep (S x) (S' x) (M x) (M' x) (R x)).
+onestep (app S1 S) (app S2 S) (app M1 M) (app M2 M) (inappl R)
+  :- onestep S1 S2 M1 M2 R.
+onestep (app S S1) (app S S2) (app M M1) (app M M2) (inappr R)
+  :- onesteplist S1 S2 M1 M2 R.
+onesteplist (S :: Ss) (S' :: Ss) (M :: Ms) (M' :: Ms) R
+  :- onestep S S' M M' R.
+onesteplist (S :: Ss) (S :: Ss') (M :: Ms) (M :: Ms') R
+  :- onesteplist Ss Ss' Ms Ms' R.
+
+(* PARSE LAMBDA TERMS *)
+
+preterm : type.
+listpreterm : type.
+prevar : string -> preterm.
+prelam : string -> preterm -> preterm.
+preapp : listpreterm -> preterm.
+precons : preterm -> listpreterm -> listpreterm.
+preone  : preterm -> listpreterm.
+
+preterm, basepreterm : syntax preterm.
+listbasepreterm : syntax listpreterm.
+`(syntax_rules <<
+basepreterm ->
+    { "(" <preterm> ")"}
+  / prelam { "lambda" <makam.ident> ":" <preterm> }
+  / prevar { <makam.ident> }
+preterm ->
+    preapp { <listbasepreterm> }
+listbasepreterm ->
+    precons { <basepreterm> <listbasepreterm> }
+  / preone  { <basepreterm> }
+>>).
+`(syntax.def_toplevel_js preterm).
+
+to_term  : preterm -> term -> prop.
+to_terms : listpreterm -> list term -> prop.
+bound    : string  -> term -> prop.
+to_term (prevar X) V :- bound X V.
+to_term (prevar X) (k X) :- not(bound X V).
+to_term (prelam X B) (lam (fun x => E x))
+  :- (x:term -> bound X x -> to_term B (E x)).
+to_term (preapp (preone H)) H'
+  :- to_term H H'.
+to_term (preapp (precons H R)) (app H' R')
+  :- to_term H H', to_terms R R'.
+to_terms (precons T Ts) (T' :: Ts')
+  :- to_term T T', to_terms Ts Ts'.
+to_terms (preone T) (T' :: [])
+  :- to_term T T'.
+
+parse Input LamN
+  :- syntax.run preterm Input Pre,
+     to_term Pre Lam, normalize Lam LamN.
+
