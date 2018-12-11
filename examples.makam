@@ -1,5 +1,19 @@
 match (lam (fun x => app (k "map") (k "replicate" :: k "2" :: []))) (lam (fun x => app (k "map") (app (k "replicate") (k "2" :: []) :: []) ) ) R ?
-match (lam (fun x => app X (k "0" :: x :: []))) (k "id") R ?
-match (lam (fun x => app X (k "0" :: []))) (k "id") R ?
-match (lam (fun x => app X (x :: []))) (k "id") R ?
-match (lam (fun x => X)) (fix (fun f => lam (fun x => app f (x :: [])))) R ?
+match (lam (fun x => app (X x) (k "0" :: x :: []))) (k "id") R ?
+match (lam (fun x => app (X x) (k "0" :: []))) (k "id") R ?
+match (lam (fun x => app (X x) (x :: []))) (k "id") R ?
+match (lam (fun x => (X x))) (fix (fun f => lam (fun x => app f (x :: [])))) R ?
+
+match (lam (fun t => case t
+                          [ alt (patk ":" (patscons patvar (patscons patvar patsnil)))
+                                (altbind (fun x => altbind (fun xs => altbody (X t x xs))))
+                          , alt (patk "[]" patsnil) (altbody (Y t))
+                          ] ))
+      (lam (fun t => case t
+                          [ alt (patk "[]" patsnil) (altbody (k "nothing"))
+                          , alt (patk ":" (patscons patvar (patscons patvar patsnil)))
+                                (altbind (fun x => altbind (fun xs => altbody (
+                                  app (k "just") (x :: [])
+                                ))))
+                          ] ))
+      R ?

@@ -55,7 +55,7 @@ normalizeA (alt P R) (alt P RN)
 normalizeR (altbody E) (altbody EN)
   :- normalize E EN.
 normalizeR (altbind E) (altbind EN)
-  :- (x:term -> normalizeR (E x) (EN x)).
+  :- (x:term -> normalize' x x -> normalizeR (E x) (EN x)).
 
 (* replace all variables by ** *)
 notvars  : term -> term -> prop.
@@ -73,14 +73,14 @@ notvars' (fix Body) (fix BodyN)
   :- (x:term -> notvars' x x -> notvars (Body x) (BodyN x)).
 notvars' (app Head Args) (app HeadN ArgsN)
   :- notvars Head HeadN, map notvars Args ArgsN.
-normalize' (case E Alts) (case EN AltsN)
+notvars' (case E Alts) (case EN AltsN)
   :- notvars E EN, map notvarsA Alts AltsN.
 notvarsA (alt P R) (alt P RN)
   :- notvarsR R RN.
 notvarsR (altbody E) (altbody EN)
   :- notvars E EN.
 notvarsR (altbind E) (altbind EN)
-  :- (x:term -> notvarsR (E x) (EN x)).
+  :- (x:term -> notvars' x x -> notvarsR (E x) (EN x)).
 
 existpat : type.
 existpat : pat zero N -> existpat.
@@ -138,12 +138,12 @@ visited : place -> term -> prop.
 match X X [].
 match S M ((rw P R T) :: Rs)
   :- not(refl.isunif S), not(eq S M), 
-     onestep S S1 M M1 P R, 
+     onestep S S1 M M1 P R,
      normalize S1 S2, normalize M1 M2,
      choosefromplace S2 M2 P T,
      (* check that we haven't been there yet *)
+     (* print "", print "iter", print S2, print M2, *)
      notvars S2 SNo, notvars M2 MNo,
-     (* print S2, print M2, *)
      (not(visited instudent SNo) ; not(visited inmodel MNo)),
      (visited instudent SNo -> visited inmodel MNo -> match S2 M2 Rs).
 
@@ -173,7 +173,7 @@ dropmatches       : list alt -> list alt -> list patr -> prop.
 findalt           : list alt -> existpat -> alt -> prop.
 
 onestep (case S A1) (case S A2) (case M B) (case M B) instudent (patmatch Rs)
-  :- map getpat A1 PatA, map getpat N PatB, not(eq PatA PatB), (* apply if not already equal *)
+  :- map getpat A1 PatA, map getpat B PatB, not(eq PatA PatB), (* apply if not already equal *)
      reorderaddmatches A1 A2 B Rs1, dropmatches A1 B Rs2, append Rs1 Rs2 Rs.
 
 reorderaddmatches As [] [] [].
@@ -219,7 +219,7 @@ onestep (app S S1) (app S S2) (app M M1) (app M M2) P (inappr R)
   :- onesteplist onestep S1 S2 M1 M2 P R.
 onestep (case S1 S) (case S2 S) (case M1 M) (case M2 M) P (incasee R)
   :- onestep S1 S2 M1 M2 P R.
-onestep (case S S1) (case S S1) (case M M1) (case M M2) P (incasea R)
+onestep (case S S1) (case S S2) (case M M1) (case M M2) P (incasea R)
   :- onesteplist onestepalt S1 S2 M1 M2 P R.
 onestepalt (alt Pat S1) (alt Pat S2) (alt Pat M1) (alt Pat M2) P R
   :- onesteprhs S1 S2 M1 M2 P R.
