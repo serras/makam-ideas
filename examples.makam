@@ -1,7 +1,8 @@
-(** IMPORTANT: always introduce a term f for the fixpoint **)
+(** IMPORTANT: always introduce a term f for the fixpoint, or use match' **)
 
 (* simple *)
-(f:term -> match f (lam (fun x => app (k "map") (k "replicate" :: k "2" :: []))) (lam (fun x => app (k "map") [app (k "replicate") [k "2"] ])) R) ?
+match' (fun f => (lam (fun x => app (k "map") (k "replicate" :: k "2" :: []))))
+       (fun f => (lam (fun x => app (k "map") [app (k "replicate") [k "2"] ]))) R ?
 (f:term -> match f (lam (fun x => app (X f x) (k "0" :: x :: []))) (k "id") R) ?
 (f:term -> match f (lam (fun x => app (X f x) (k "0" :: []))) (k "id") R) ?
 (f:term -> match f (lam (fun x => app (X f x) (x :: []))) (k "id") R) ?
@@ -38,3 +39,7 @@
 (* composition *)
 (f:term -> match f (lam (fun x => app (X x) [x])) (app (k ".") [k "bli", k "blu"]) R) ?
 (f:term -> match f (lam (fun x => app (X x) [x])) (lam (fun x => app (k "bli") [app (k "blu") [x]])) R) ?
+
+(* maps *)
+match' (fun f => lam (fun xs => case xs L))
+       (fun f => app (k "map") [lam (fun x => app (k "+") [x, k "2"])]) R ?

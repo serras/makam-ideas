@@ -8,6 +8,7 @@ term : type.
 k   : string -> term.
 lam : (term -> term) -> term.
 app : term -> list term -> term.
+star : term.  (* only for novars checking *)
 
 (* patterns follow the icfp'18 paper *)
 altrhs : (N: type) -> type.
@@ -23,6 +24,7 @@ patscons : pat N M -> pats M O -> pats N O.
 
 alt : type.
 alt : pat zero N -> altrhs N -> alt.
+placeholderalts : list alt.  (* only for novars checking *)
 case : term -> list alt -> term.
 
 (* remove nested apps *)
@@ -44,8 +46,10 @@ normalize' (app App Args2) Norm
      append Args1 Args2 Args, normalize (app Head Args) Norm.
 normalize' (app Head Args) (app HeadN ArgsN)
   :- not(eq Args []), normalize Head HeadN, map normalize Args ArgsN.
+normalize' (case E Alts) (case EN Alts)
+  :- refl.isunif Alts, normalize E EN.
 normalize' (case E Alts) (case EN AltsN)
-  :- normalize E EN, map normalizeA Alts AltsN.
+  :- not(refl.isunif Alts), normalize E EN, map normalizeA Alts AltsN.
 normalizeA (alt P R) (alt P RN)
   :- normalizeR R RN.
 normalizeR (altbody E) (altbody EN)
@@ -58,7 +62,7 @@ notvars  : term -> term -> prop.
 notvars' : term -> term -> prop.
 notvarsA : alt -> alt -> prop.
 notvarsR : [N] altrhs N -> altrhs N -> prop.
-notvars X (k "**")
+notvars X star
   :- refl.isunif X.
 notvars X Y
   :- not(refl.isunif X), notvars' X Y.
@@ -67,8 +71,10 @@ notvars' (lam Body) (lam BodyN)
   :- (x:term -> notvars' x x -> notvars (Body x) (BodyN x)).
 notvars' (app Head Args) (app HeadN ArgsN)
   :- notvars Head HeadN, map notvars Args ArgsN.
+notvars' (case E Alts) (case EN placeholderalts)
+  :- refl.isunif Alts, notvars E EN.
 notvars' (case E Alts) (case EN AltsN)
-  :- notvars E EN, map notvarsA Alts AltsN.
+  :- not(refl.isunif Alts), notvars E EN, map notvarsA Alts AltsN.
 notvarsA (alt P R) (alt P RN)
   :- notvarsR R RN.
 notvarsR (altbody E) (altbody EN)
@@ -103,6 +109,7 @@ droppat    : existpat -> patr.
 npluszero : r.
 defn_id   : r.
 compose   : r.
+expandmap : r.
 (* mistakes *)
 wrong_parens : r.
 
@@ -113,6 +120,7 @@ inmodel   : place.
 rewriting : type.
 rw : place -> r -> term -> rewriting.
 
+match' : (term -> term) -> (term -> term) -> (term -> list rewriting) -> prop.
 match : term -> term -> term -> list rewriting -> prop.
 matchOneStep : term -> term -> term -> place -> r -> term -> term -> prop.
 choosefromplace : term -> term -> place -> term -> prop.
@@ -125,6 +133,8 @@ onesteplist : (A -> A -> A -> A -> place -> r -> prop)
 
 visited : place -> term -> prop.
 
+match' S M R :- (f:term -> match f (S f) (M f) (R f)).
+
 match Me X X [].
 match Me S M ((rw P R T) :: Rs)
   :- not(refl.isunif S), not(eq S M), 
@@ -132,7 +142,9 @@ match Me S M ((rw P R T) :: Rs)
      normalize S1 S2, normalize M1 M2,
      choosefromplace S2 M2 P T,
      (* check that we haven't been there yet *)
+     print "", print "next", print S2, print M2, print R,
      notvars S2 SNo, notvars M2 MNo,
+     print SNo, print MNo,
      (eq S2 M2 ; not(visited instudent SNo) ; not(visited inmodel MNo)),
      (visited instudent SNo -> visited inmodel MNo -> match Me S2 M2 Rs).
 
@@ -147,11 +159,15 @@ choosefromplace S M inmodel   M.
 
 onestep Me (app (k "+") [k "0", X]) X M M instudent npluszero.
 
-(*
-onestep Me (case E Alts) (case E Alts)
+onestep Me C C
         (app (k "map") [F,Xs])
-        (case )
-*)
+        (case Xs [ alt (patk "[]" patsnil) (altbody (k "[]"))
+                 , alt (patk ":" (patscons patvar (patscons patvar patsnil)))
+                       (altbind (fun x => altbind (fun xs => altbody (
+                         app (k ":") [app F [x], app (k "zosito") [xs]]
+                       ))))
+                 ]) inmodel expandmap
+  :- not(refl.isunif C), eq C (case _ _).  (* do not refine if the case is not there *)
 
 (* rules which apply in any side *)
 onestep Me S S' M M instudent R :- onestepany Me S S' R.
