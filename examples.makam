@@ -1,10 +1,15 @@
-match (lam (fun x => app (k "map") (k "replicate" :: k "2" :: []))) (lam (fun x => app (k "map") (app (k "replicate") (k "2" :: []) :: []) ) ) R ?
-match (lam (fun x => app (X x) (k "0" :: x :: []))) (k "id") R ?
-match (lam (fun x => app (X x) (k "0" :: []))) (k "id") R ?
-match (lam (fun x => app (X x) (x :: []))) (k "id") R ?
-match (lam (fun x => (X x))) (fix (fun f => lam (fun x => app f (x :: [])))) R ?
+(** IMPORTANT: always introduce a term f for the fixpoint **)
 
-match (lam (fun t => case t
+(* simple *)
+(f:term -> match f (lam (fun x => app (k "map") (k "replicate" :: k "2" :: []))) (lam (fun x => app (k "map") [app (k "replicate") [k "2"] ])) R) ?
+(f:term -> match f (lam (fun x => app (X f x) (k "0" :: x :: []))) (k "id") R) ?
+(f:term -> match f (lam (fun x => app (X f x) (k "0" :: []))) (k "id") R) ?
+(f:term -> match f (lam (fun x => app (X f x) (x :: []))) (k "id") R) ?
+(f:term -> match f (lam (fun x => (X f x))) (lam (fun x => app f (x :: []))) R) ?
+
+(* pattern matching *)
+(f:term -> match f
+      (lam (fun t => case t
                           [ alt (patk ":" (patscons patvar (patscons patvar patsnil)))
                                 (altbind (fun x => altbind (fun xs => altbody (X t x xs))))
                           , alt (patk "[]" patsnil) (altbody (Y t))
@@ -16,9 +21,9 @@ match (lam (fun t => case t
                                   app (k "just") (x :: [])
                                 ))))
                           ] ))
-      R ?
-
-match (lam (fun t => case t [ alt (patk ":" (patscons patvar (patscons patvar patsnil)))
+      R) ?
+(f:term -> match f
+      (lam (fun t => case t [ alt (patk ":" (patscons patvar (patscons patvar patsnil)))
                                   (altbind (fun x => altbind (fun xs => altbody (X t x xs))))
                             , P ]))
       (lam (fun t => case t
@@ -28,4 +33,8 @@ match (lam (fun t => case t [ alt (patk ":" (patscons patvar (patscons patvar pa
                                   app (k "just") (x :: [])
                                 ))))
                           ] ))
-      R ?
+      R) ?
+
+(* composition *)
+(f:term -> match f (lam (fun x => app (X x) [x])) (app (k ".") [k "bli", k "blu"]) R) ?
+(f:term -> match f (lam (fun x => app (X x) [x])) (lam (fun x => app (k "bli") [app (k "blu") [x]])) R) ?
