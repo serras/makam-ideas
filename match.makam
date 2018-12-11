@@ -82,12 +82,18 @@ notvarsR (altbody E) (altbody EN)
 notvarsR (altbind E) (altbind EN)
   :- (x:term -> notvarsR (E x) (EN x)).
 
+existpat : type.
+existpat : pat zero N -> existpat.
+getpat : alt -> existpat -> prop.
+getpat (alt P _) (existpat P).
+
 parse : string -> term -> prop.
 (* defined later *)
 
 (* REWRITINGS *)
 
 r : type.
+patr : type.
 (* structural rewritings *)
 inappl  : r -> r.
 inappr  : r -> r.
@@ -99,6 +105,10 @@ incasea : r -> r.
 betareduce : r.
 etaexpand  : r.
 introfix   : r.
+(* reorder, add, drop matches *)
+patmatch   : list patr -> r.
+addpat     : existpat -> patr.
+droppat    : existpat -> patr.
 (* real rewritings *)
 npluszero : r.
 defn_id   : r.
@@ -117,8 +127,11 @@ match : term -> term -> list rewriting -> prop.
 matchOneStep : term -> term -> place -> r -> term -> term -> prop.
 choosefromplace : term -> term -> place -> term -> prop.
 onestep : term -> term -> term -> term -> place -> r -> prop.
-onesteplist : list term -> list term -> list term -> list term -> place -> r -> prop.
 onestepany : term -> term -> r -> prop.
+onestepalt : alt -> alt -> alt -> alt -> place -> r -> prop.
+onesteprhs : [N] altrhs N -> altrhs N -> altrhs N -> altrhs N -> place -> r -> prop.
+onesteplist : (A -> A -> A -> A -> place -> r -> prop)
+              -> list A -> list A -> list A -> list A -> place -> r -> prop.
 
 visited : place -> term -> prop.
 
@@ -154,6 +167,30 @@ onestep S S M M' inmodel   R :- onestepany M M' R.
 onestep (app F (G :: Args)) (app F (app G Args :: []))
         (app F' (A' :: [])) (app F' (A' :: [])) instudent wrong_parens.
 
+(* match the patterns in a case *)
+reorderaddmatches : list alt -> list alt -> list alt -> list patr -> prop.
+dropmatches       : list alt -> list alt -> list patr -> prop.
+findalt           : list alt -> existpat -> alt -> prop.
+
+onestep (case S A1) (case S A2) (case M B) (case M B) instudent (patmatch Rs)
+  :- map getpat A1 PatA, map getpat N PatB, not(eq PatA PatB), (* apply if not already equal *)
+     reorderaddmatches A1 A2 B Rs1, dropmatches A1 B Rs2, append Rs1 Rs2 Rs.
+
+reorderaddmatches As [] [] [].
+reorderaddmatches As (A :: NextAs) ((alt P _) :: Ms) Rs
+  :- findalt As (existpat P) A, reorderaddmatches As NextAs Ms Rs.
+reorderaddmatches As ((alt P E) :: NextAs) ((alt P E) :: Ms) (addpat (existpat P) :: Rs)
+  :- not(findalt As (existpat P) _), reorderaddmatches As NextAs Ms Rs.
+
+dropmatches [] Ms [].
+dropmatches ((alt P _) :: As) Ms Rs
+  :- findalt Ms (existpat P) _, dropmatches As Ms Rs.
+dropmatches ((alt P _) :: As) Ms (droppat (existpat P) :: Rs)
+  :- not(findalt Ms (existpat P) _), dropmatches As Ms Rs.
+
+findalt ((alt P E) :: Alts) (existpat P) (alt P E).
+findalt (_ :: Alts) P R :- findalt Alts P R.
+
 (* a special one, you should never guess from these rules *)
 onestepany (app KId (X :: Rest)) (app X Rest) defn_id
   :- eq_nounif KId (k "id").
@@ -179,13 +216,21 @@ onestep (fix S) (fix S') (fix M) (fix M') P (infix R)
 onestep (app S1 S) (app S2 S) (app M1 M) (app M2 M) P (inappl R)
   :- onestep S1 S2 M1 M2 P R.
 onestep (app S S1) (app S S2) (app M M1) (app M M2) P (inappr R)
-  :- onesteplist S1 S2 M1 M2 P R.
+  :- onesteplist onestep S1 S2 M1 M2 P R.
 onestep (case S1 S) (case S2 S) (case M1 M) (case M2 M) P (incasee R)
   :- onestep S1 S2 M1 M2 P R.
-onesteplist (S :: Ss) (S' :: Ss) (M :: Ms) (M' :: Ms) P R
-  :- onestep S S' M M' P R.
-onesteplist (S :: Ss) (S :: Ss') (M :: Ms) (M :: Ms') P R
-  :- onesteplist Ss Ss' Ms Ms' P R.
+onestep (case S S1) (case S S1) (case M M1) (case M M2) P (incasea R)
+  :- onesteplist onestepalt S1 S2 M1 M2 P R.
+onestepalt (alt Pat S1) (alt Pat S2) (alt Pat M1) (alt Pat M2) P R
+  :- onesteprhs S1 S2 M1 M2 P R.
+onesteprhs (altbody S1) (altbody S2) (altbody M1) (altbody M2) P R
+  :- onestep S1 S2 M1 M2 P R.
+onesteprhs (altbind S1) (altbind S2) (altbind M1) (altbind M2) P R
+  :- (x:term -> onesteprhs (S1 x) (S2 x) (M1 x) (M2 x) P R).
+onesteplist F (S :: Ss) (S' :: Ss) (M :: Ms) (M' :: Ms) P R
+  :- F S S' M M' P R.
+onesteplist F (S :: Ss) (S :: Ss') (M :: Ms) (M :: Ms') P R
+  :- onesteplist F Ss Ss' Ms Ms' P R.
 
 (* PARSE LAMBDA TERMS *)
 
