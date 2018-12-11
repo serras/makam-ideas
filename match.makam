@@ -1,21 +1,45 @@
 %open syntax.
 
+zero : type.
+succ : type -> type.
+
 (* SIMPLE SYNTAX OF LAMBDA TERMS *)
 
 term : type.
 k   : string -> term.
 lam : (term -> term) -> term.
-app : term -> list term -> term.
 fix : (term -> term) -> term.
+app : term -> list term -> term.
 
+(* patterns follow the icfp'18 paper *)
+altrhs : (N: type) -> type.
+altbind : (term -> altrhs N) -> altrhs (succ N).
+altbody : term -> altrhs zero.
+
+pat  : (NBefore: type) (NAfter: type) -> type.
+pats : (NBefore: type) (NAfter: type) -> type.
+patvar : pat N (succ N).
+patk   : string -> pats N M -> pat N M.
+patsnil  : pats N N.
+patscons : pat N M -> pats M O -> pats N O.
+
+alt : type.
+alt : pat zero N -> altrhs N -> alt.
+case : term -> list alt -> term.
+
+(* remove nested apps *)
 normalize  : term -> term -> prop.
 normalize' : term -> term -> prop.
+normalizeA : alt -> alt -> prop.
+normalizeR : [N] altrhs N -> altrhs N -> prop.
 normalize X X
   :- refl.isunif X.
 normalize X Y
   :- not(refl.isunif X), normalize' X Y.
 normalize' (k X) (k Y) :- eq X Y.
 normalize' (lam Body) (lam BodyN)
+  :- (x:term -> normalize' x x -> normalize (Body x) (BodyN x)).
+normalize' (fix Body) (fix BodyN)
   :- (x:term -> normalize' x x -> normalize (Body x) (BodyN x)).
 normalize' (app Fun []) FunN
   :- normalize Fun FunN.
@@ -24,9 +48,20 @@ normalize' (app App Args2) Norm
      append Args1 Args2 Args, normalize (app Head Args) Norm.
 normalize' (app Head Args) (app HeadN ArgsN)
   :- not(eq Args []), normalize Head HeadN, map normalize Args ArgsN.
+normalize' (case E Alts) (case EN AltsN)
+  :- normalize E EN, map normalizeA Alts AltsN.
+normalizeA (alt P R) (alt P RN)
+  :- normalizeR R RN.
+normalizeR (altbody E) (altbody EN)
+  :- normalize E EN.
+normalizeR (altbind E) (altbind EN)
+  :- (x:term -> normalizeR (E x) (EN x)).
 
+(* replace all variables by ** *)
 notvars  : term -> term -> prop.
 notvars' : term -> term -> prop.
+notvarsA : alt -> alt -> prop.
+notvarsR : [N] altrhs N -> altrhs N -> prop.
 notvars X (k "**")
   :- refl.isunif X.
 notvars X Y
@@ -34,8 +69,18 @@ notvars X Y
 notvars' (k X) (k X).
 notvars' (lam Body) (lam BodyN)
   :- (x:term -> notvars' x x -> notvars (Body x) (BodyN x)).
+notvars' (fix Body) (fix BodyN)
+  :- (x:term -> notvars' x x -> notvars (Body x) (BodyN x)).
 notvars' (app Head Args) (app HeadN ArgsN)
   :- notvars Head HeadN, map notvars Args ArgsN.
+normalize' (case E Alts) (case EN AltsN)
+  :- notvars E EN, map notvarsA Alts AltsN.
+notvarsA (alt P R) (alt P RN)
+  :- notvarsR R RN.
+notvarsR (altbody E) (altbody EN)
+  :- notvars E EN.
+notvarsR (altbind E) (altbind EN)
+  :- (x:term -> notvarsR (E x) (EN x)).
 
 parse : string -> term -> prop.
 (* defined later *)
@@ -44,12 +89,16 @@ parse : string -> term -> prop.
 
 r : type.
 (* structural rewritings *)
-inappl : r -> r.
-inappr : r -> r.
-inlam  : r -> r.
+inappl  : r -> r.
+inappr  : r -> r.
+inlam   : r -> r.
+infix   : r -> r.
+incasee : r -> r.
+incasea : r -> r.
 (* semi-real rewritings *)
 betareduce : r.
 etaexpand  : r.
+introfix   : r.
 (* real rewritings *)
 npluszero : r.
 defn_id   : r.
@@ -81,6 +130,7 @@ match S M ((rw P R T) :: Rs)
      choosefromplace S2 M2 P T,
      (* check that we haven't been there yet *)
      notvars S2 SNo, notvars M2 MNo,
+     (* print S2, print M2, *)
      (not(visited instudent SNo) ; not(visited inmodel MNo)),
      (visited instudent SNo -> visited inmodel MNo -> match S2 M2 Rs).
 
@@ -94,32 +144,44 @@ choosefromplace S M instudent S.
 choosefromplace S M inmodel   M.
 
 onestep (app (k "+") (k "0" :: X :: [])) X M M instudent npluszero.
-onestep (app (lam F) (X :: [])) (F X)              M M instudent betareduce.
-onestep (app (lam F) (X :: Rest)) (app (F X) Rest) M M instudent betareduce
-  :- not(eq Rest []).
-onestep (lam F) (lam F) M (lam (fun x => app M (x :: []))) inmodel etaexpand
-  :- not(eq M (lam _)).
 
 (* rules which apply in any side *)
 onestep S S' M M instudent R :- onestepany S S' R.
 onestep S S M M' inmodel   R :- onestepany M M' R.
-
-(* a special one, you should never guess this one *)
-onestepany (app (k "id") (X :: Rest)) (app X Rest) defn_id.
-(* onestepany (app (k ".") (F :: G :: X :: R)) (app F (app G (X :: []) :: R)) compose. *)
 
 (* mistakes *)
 (* wrong parens -> `x y z` turns into `x (y z)` *)
 onestep (app F (G :: Args)) (app F (app G Args :: []))
         (app F' (A' :: [])) (app F' (A' :: [])) instudent wrong_parens.
 
+(* a special one, you should never guess from these rules *)
+onestepany (app KId (X :: Rest)) (app X Rest) defn_id
+  :- eq_nounif KId (k "id").
+onestepany (app KComp (F :: G :: X :: R)) (app F (app G (X :: []) :: R)) compose
+  :- eq_nounif KComp (k ".").
+
+(* beta and eta rules, do not apply on variables *)
+onestep (app L (X :: [])) (F X)              M M instudent betareduce
+  :- not(refl.isunif L), eq L (lam F), not(refl.isunif F).
+onestep (app L (X :: Rest)) (app (F X) Rest) M M instudent betareduce
+  :- not(refl.isunif L), eq L (lam F), not(refl.isunif F), not(eq Rest []).
+onestep L L M (lam (fun x => app M (x :: []))) inmodel etaexpand
+  :- not(refl.isunif L), eq L (lam F), not(refl.isunif F),
+     not(eq M (lam _)), not(eq M (fix _)).  (* do not expand if lambda or fix *)
+onestep S (fix (fun x => S)) (fix M) (fix M) instudent introfix
+  :- not(eq S (fix _)).
+
 (* structural, only go if rewrite doesn't work *)
 onestep (lam S) (lam S') (lam M) (lam M') P (inlam R)
+  :- (x:term -> onestep (S x) (S' x) (M x) (M' x) P R).
+onestep (fix S) (fix S') (fix M) (fix M') P (infix R)
   :- (x:term -> onestep (S x) (S' x) (M x) (M' x) P R).
 onestep (app S1 S) (app S2 S) (app M1 M) (app M2 M) P (inappl R)
   :- onestep S1 S2 M1 M2 P R.
 onestep (app S S1) (app S S2) (app M M1) (app M M2) P (inappr R)
   :- onesteplist S1 S2 M1 M2 P R.
+onestep (case S1 S) (case S2 S) (case M1 M) (case M2 M) P (incasee R)
+  :- onestep S1 S2 M1 M2 P R.
 onesteplist (S :: Ss) (S' :: Ss) (M :: Ms) (M' :: Ms) P R
   :- onestep S S' M M' P R.
 onesteplist (S :: Ss) (S :: Ss') (M :: Ms) (M :: Ms') P R

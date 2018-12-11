@@ -1,3 +1,5 @@
 match (lam (fun x => app (k "map") (k "replicate" :: k "2" :: []))) (lam (fun x => app (k "map") (app (k "replicate") (k "2" :: []) :: []) ) ) R ?
 match (lam (fun x => app X (k "0" :: x :: []))) (k "id") R ?
 match (lam (fun x => app X (k "0" :: []))) (k "id") R ?
+match (lam (fun x => app X (x :: []))) (k "id") R ?
+match (lam (fun x => X)) (fix (fun f => lam (fun x => app f (x :: [])))) R ?
