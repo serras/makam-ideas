@@ -17,3 +17,15 @@ match (lam (fun t => case t
                                 ))))
                           ] ))
       R ?
+
+match (lam (fun t => case t [ alt (patk ":" (patscons patvar (patscons patvar patsnil)))
+                                  (altbind (fun x => altbind (fun xs => altbody (X t x xs))))
+                            , P ]))
+      (lam (fun t => case t
+                          [ alt (patk "[]" patsnil) (altbody (k "nothing"))
+                          , alt (patk ":" (patscons patvar (patscons patvar patsnil)))
+                                (altbind (fun x => altbind (fun xs => altbody (
+                                  app (k "just") (x :: [])
+                                ))))
+                          ] ))
+      R ?
