@@ -41,5 +41,12 @@ match' (fun f => (lam (fun x => app (k "map") (k "replicate" :: k "2" :: []))))
 (f:term -> match f (lam (fun x => app (X x) [x])) (lam (fun x => app (k "bli") [app (k "blu") [x]])) R) ?
 
 (* maps *)
-match' (fun f => lam (fun xs => case xs L))
+match' (fun f => lam (fun xs => case xs (L f xs)))
+       (fun f => app (k "map") [lam (fun x => app (k "+") [x, k "2"])]) R ?
+match' (fun f => lam (fun xs => case xs
+                                     (alt (patk ":" (patscons patvar (patscons patvar patsnil)))
+                                          (altbind (fun y => altbind (fun ys => altbody (
+                                             app (k ":") [app (k "+") [y, k "2"], (M f xs y ys)]
+                                          ))))
+                                     :: (L f xs))))
        (fun f => app (k "map") [lam (fun x => app (k "+") [x, k "2"])]) R ?

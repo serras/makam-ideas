@@ -2,6 +2,19 @@
 zero : type.
 succ : type -> type.
 
+mapU : (A -> A -> prop) -> list A -> list A -> prop.
+mapU F S S :- refl.isunif S.
+mapU F [] [].
+mapU F (A :: As) (B :: Bs) :- F A B, mapU F As Bs.
+
+placeholderlist : list A.
+
+mapN : list B -> (A -> B -> prop) -> list A -> list B -> prop.
+mapN Placeholder F S Placeholder :- refl.isunif S.
+mapN Placeholder F [] [].
+mapN Placeholder F (A :: As) (B :: Bs)
+  :- F A B, mapN Placeholder F As Bs.
+
 (* SIMPLE SYNTAX OF LAMBDA TERMS *)
 
 term : type.
@@ -24,7 +37,6 @@ patscons : pat N M -> pats M O -> pats N O.
 
 alt : type.
 alt : pat zero N -> altrhs N -> alt.
-placeholderalts : list alt.  (* only for novars checking *)
 case : term -> list alt -> term.
 
 (* remove nested apps *)
@@ -45,11 +57,9 @@ normalize' (app App Args2) Norm
   :- not(refl.isunif App), eq App (app Head Args1),
      append Args1 Args2 Args, normalize (app Head Args) Norm.
 normalize' (app Head Args) (app HeadN ArgsN)
-  :- not(eq Args []), normalize Head HeadN, map normalize Args ArgsN.
-normalize' (case E Alts) (case EN Alts)
-  :- refl.isunif Alts, normalize E EN.
+  :- not(eq Args []), normalize Head HeadN, mapU normalize Args ArgsN.
 normalize' (case E Alts) (case EN AltsN)
-  :- not(refl.isunif Alts), normalize E EN, map normalizeA Alts AltsN.
+  :- normalize E EN, mapU normalizeA Alts AltsN.
 normalizeA (alt P R) (alt P RN)
   :- normalizeR R RN.
 normalizeR (altbody E) (altbody EN)
@@ -70,11 +80,9 @@ notvars' (k X) (k X).
 notvars' (lam Body) (lam BodyN)
   :- (x:term -> notvars' x x -> notvars (Body x) (BodyN x)).
 notvars' (app Head Args) (app HeadN ArgsN)
-  :- notvars Head HeadN, map notvars Args ArgsN.
-notvars' (case E Alts) (case EN placeholderalts)
-  :- refl.isunif Alts, notvars E EN.
+  :- notvars Head HeadN, mapN placeholderlist notvars Args ArgsN.
 notvars' (case E Alts) (case EN AltsN)
-  :- not(refl.isunif Alts), notvars E EN, map notvarsA Alts AltsN.
+  :- notvars E EN, mapN placeholderlist notvarsA Alts AltsN.
 notvarsA (alt P R) (alt P RN)
   :- notvarsR R RN.
 notvarsR (altbody E) (altbody EN)
@@ -82,10 +90,19 @@ notvarsR (altbody E) (altbody EN)
 notvarsR (altbind E) (altbind EN)
   :- (x:term -> notvars' x x -> notvarsR (E x) (EN x)).
 
+(* beta-reduce the top *)
+betaReduceTop : term -> term -> prop.
+betaReduceTop (app T []) Y 
+  :- betaReduceTop T Y.
+betaReduceTop (app (lam F) (Arg :: Rest)) Y
+  :- betaReduceTop (app (F Arg) Rest) Y.
+betaReduceTop X X
+  :- not(eq X (app (lam _) _)).
+
 existpat : type.
 existpat : pat zero N -> existpat.
 getpat : alt -> existpat -> prop.
-getpat (alt P _) (existpat P).
+getpat (alt Pat _) (existpat Pat).
 
 (* REWRITINGS *)
 
@@ -133,18 +150,17 @@ onesteplist : (A -> A -> A -> A -> place -> r -> prop)
 
 visited : place -> term -> prop.
 
-match' S M R :- (f:term -> match f (S f) (M f) (R f)).
+match' S M R :- (f:term -> normalize' f f -> notvars' f f -> match f (S f) (M f) (R f)).
 
 match Me X X [].
 match Me S M ((rw P R T) :: Rs)
-  :- not(refl.isunif S), not(eq S M), 
+  :- not(refl.isunif S), not(eq S M),
      onestep Me S S1 M M1 P R,
      normalize S1 S2, normalize M1 M2,
      choosefromplace S2 M2 P T,
      (* check that we haven't been there yet *)
-     print "", print "next", print S2, print M2, print R,
+     print "", print "next", print S2, print M2, print P, print R,
      notvars S2 SNo, notvars M2 MNo,
-     print SNo, print MNo,
      (eq S2 M2 ; not(visited instudent SNo) ; not(visited inmodel MNo)),
      (visited instudent SNo -> visited inmodel MNo -> match Me S2 M2 Rs).
 
@@ -164,10 +180,11 @@ onestep Me C C
         (case Xs [ alt (patk "[]" patsnil) (altbody (k "[]"))
                  , alt (patk ":" (patscons patvar (patscons patvar patsnil)))
                        (altbind (fun x => altbind (fun xs => altbody (
-                         app (k ":") [app F [x], app (k "zosito") [xs]]
+                         app (k ":") [FX x xs, MeXs x xs]
                        ))))
                  ]) inmodel expandmap
-  :- not(refl.isunif C), eq C (case _ _).  (* do not refine if the case is not there *)
+  :- not(refl.isunif C), eq C (case _ _), (* do not refine if the case is not there *)
+     (x:term -> xs:term -> (betaReduceTop (app F [x]) (FX x xs), betaReduceTop (app Me [xs]) (MeXs x xs))).
 
 (* rules which apply in any side *)
 onestep Me S S' M M instudent R :- onestepany Me S S' R.
@@ -185,7 +202,7 @@ dropmatches       : list alt -> list alt -> list patr -> prop.
 findalt           : list alt -> existpat -> alt -> prop.
 
 onestep Me (case S A1) (case S A2) (case M B) (case M B) instudent (patmatch Rs)
-  :- map getpat A1 PatA, map getpat B PatB, not(eq PatA PatB), (* apply if not already equal *)
+  :- mapN [] getpat A1 PatA, mapN [] getpat B PatB, not(eq PatA PatB), (* apply if not already equal *)
      reorderaddmatches A1 A2 B Rs1, dropmatches A1 B Rs2, append Rs1 Rs2 Rs.
 
 reorderaddmatches As [] [] [].
@@ -226,7 +243,7 @@ onestep Me (app F Xs) (app F Xs) (app G Gs) (app G Gs) instudent betaexpand
 (* wrong parens -> `x y z` turns into `x (y z)` *)
 onestep Me (app F (G :: Args)) (app F [app G Args])
            (app F' [A']) (app F' [A']) instudent wrong_parens
-  :- not(eq Args []).
+  :- not(eq Args []), not (eq F' (lam _)).
 
 (* structural, only go if rewrite doesn't work *)
 onestep Me (lam S) (lam S') (lam M) (lam M') P (inlam R)
