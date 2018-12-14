@@ -3,49 +3,51 @@
 (* simple *)
 match' (fun f => (lam (fun x => app (k "map") (k "replicate" :: k "2" :: []))))
        (fun f => (lam (fun x => app (k "map") [app (k "replicate") [k "2"] ]))) R ?
-(f:term -> match f (lam (fun x => app (X f x) (k "0" :: x :: []))) (k "id") R) ?
-(f:term -> match f (lam (fun x => app (X f x) (k "0" :: []))) (k "id") R) ?
-(f:term -> match f (lam (fun x => app (X f x) (x :: []))) (k "id") R) ?
-(f:term -> match f (lam (fun x => (X f x))) (lam (fun x => app f (x :: []))) R) ?
+match' (fun f => (lam (fun x => app (X f x) (k "0" :: x :: []))))
+       (fun f => (k "id")) R ?
+match' (fun f => (lam (fun x => app (X f x) (k "0" :: []))))
+       (fun f => (k "id")) R ?
+match' (fun f => (lam (fun x => app (X f x) (x :: []))))
+       (fun f => (k "id")) R ?
+match' (fun f => (lam (fun x => (X f x))))
+       (fun f => (lam (fun x => app f (x :: [])))) R ?
 
 (* pattern matching *)
-(f:term -> match f
-      (lam (fun t => case t
+match' (fun f => (lam (fun t => case t
                           [ alt (patk ":" (patscons patvar (patscons patvar patsnil)))
-                                (altbind (fun x => altbind (fun xs => altbody (X t x xs))))
-                          , alt (patk "[]" patsnil) (altbody (Y t))
-                          ] ))
-      (lam (fun t => case t
-                          [ alt (patk "[]" patsnil) (altbody (k "nothing"))
+                                (bind (fun x => bind (fun xs => body (X t x xs))))
+                          , alt (patk "[]" patsnil) (body (Y t))
+                          ] )))
+       (fun f => (lam (fun t => case t
+                          [ alt (patk "[]" patsnil) (body (k "nothing"))
                           , alt (patk ":" (patscons patvar (patscons patvar patsnil)))
-                                (altbind (fun x => altbind (fun xs => altbody (
+                                (bind (fun x => bind (fun xs => body (
                                   app (k "just") (x :: [])
                                 ))))
-                          ] ))
-      R) ?
-(f:term -> match f
-      (lam (fun t => case t [ alt (patk ":" (patscons patvar (patscons patvar patsnil)))
-                                  (altbind (fun x => altbind (fun xs => altbody (X t x xs))))
-                            , P ]))
-      (lam (fun t => case t
-                          [ alt (patk "[]" patsnil) (altbody (k "nothing"))
+                          ] ))) R ?
+match' (fun f => (lam (fun t => case t [ alt (patk ":" (patscons patvar (patscons patvar patsnil)))
+                                  (bind (fun x => bind (fun xs => body (X t x xs))))
+                            , P ])))
+       (fun f => (lam (fun t => case t
+                          [ alt (patk "[]" patsnil) (body (k "nothing"))
                           , alt (patk ":" (patscons patvar (patscons patvar patsnil)))
-                                (altbind (fun x => altbind (fun xs => altbody (
+                                (bind (fun x => bind (fun xs => body (
                                   app (k "just") (x :: [])
                                 ))))
-                          ] ))
-      R) ?
+                          ] ))) R ?
 
 (* composition *)
-(f:term -> match f (lam (fun x => app (X x) [x])) (app (k ".") [k "bli", k "blu"]) R) ?
-(f:term -> match f (lam (fun x => app (X x) [x])) (lam (fun x => app (k "bli") [app (k "blu") [x]])) R) ?
+match' (fun f => (lam (fun x => app (X x) [x])))
+       (fun f => (app (k ".") [k "bli", k "blu"])) R ?
+match' (fun f => (lam (fun x => app (X x) [x])))
+       (fun f => (lam (fun x => app (k "bli") [app (k "blu") [x]]))) R ?
 
 (* maps *)
 match' (fun f => lam (fun xs => case xs (L f xs)))
        (fun f => app (k "map") [lam (fun x => app (k "+") [x, k "2"])]) R ?
 match' (fun f => lam (fun xs => case xs
                                      (alt (patk ":" (patscons patvar (patscons patvar patsnil)))
-                                          (altbind (fun y => altbind (fun ys => altbody (
+                                          (bind (fun y => bind (fun ys => body (
                                              app (k ":") [app (k "+") [y, k "2"], (M f xs y ys)]
                                           ))))
                                      :: (L f xs))))
