@@ -127,8 +127,9 @@ inappr  : r -> r.
 inlam   : r -> r.
 incasee : r -> r.
 incasea : r -> r.
-inline  : r.
 inlet   : r -> r.
+inline  : r.
+rmlet   : r.
 (* semi-real rewritings *)
 betareduce : r.
 betaexpand : r.
@@ -179,7 +180,7 @@ match S M ((rw P R T) :: Rs)
      normalize S1 S2, normalize M1 M2,
      choosefromplace S2 M2 P T,
      (* check that we haven't been there yet *)
-     print "", print "next", print S2, print M2, print P, print R,
+     (* print "", print "next", print S2, print M2, print P, print R, *)
      notvars S2 SNo, notvars M2 MNo,
      (eq S2 M2 ; not(visited instudent SNo) ; not(visited inmodel MNo)),
      (visited instudent SNo -> visited inmodel MNo -> match S2 M2 Rs).
@@ -209,6 +210,7 @@ onestepany (app KId (X :: Rest)) (app X Rest) defn_id
   :- eq_nounif KId (k "id").
 onestepany (app KComp (F :: G :: X :: R)) (app F (app G [X] :: R)) compose
   :- eq_nounif KComp (k ".").
+onestepany (app (k "fromJust") [app (k "Just" [X])]) X.
 
 (* match the patterns in a case *)
 reorderaddmatches : list alt -> list alt -> list alt -> list patr -> prop.
@@ -233,6 +235,9 @@ dropmatches ((alt P _) :: As) Ms (droppat (existpat P) :: Rs)
 
 findalt ((alt P E) :: Alts) (existpat P) (alt P E).
 findalt (_ :: Alts) P R :- findalt Alts P R.
+
+(* drop unneeded lets *)
+(* TODO *)
 
 (* beta and eta rules, do not apply on variables *)
 onestep (app L [X]) (F X)              M M instudent betareduce
@@ -272,7 +277,7 @@ onestep (case S S1) (case S S2) (case M M1) (case M M2) P (incasea R)
   :- onesteplist onestepalt S1 S2 M1 M2 P R.
 onestepalt (alt Pat S1) (alt Pat S2) (alt Pat M1) (alt Pat M2) P R
   :- onestepbind onestep S1 S2 M1 M2 P R.
-(* lets are a bit tricky *)
+(* lets are a bit tricky, put then in the context *)
 onesteplets : [N] list term -> (bindN term N (nOf M term))
               -> (bindN term N term) -> (bindN term N term)
               -> term -> term
@@ -284,21 +289,21 @@ onestepletm : [N] list term -> term -> term
 onestepletassume : [N] list term -> nOf N term
                  -> term -> term -> term -> term -> place -> r -> prop.
 onestep L1 L2 M1 M2 P R
-  :- print "onesteps", not(refl.isunif L1), eq L1 (let Xs E1), eq L2 (let Xs E2), onesteplets [] Xs E1 E2 M1 M2 P R.
+  :- not(refl.isunif L1), eq L1 (let Xs E1), eq L2 (let Xs E2), onesteplets [] Xs E1 E2 M1 M2 P R.
 onesteplets Vars (bind Xs) (bind E1) (bind E2) M1 M2 P R
-  :- print "onesteplets-bind", (x:term -> (print Vars, print [x], append Vars [x] Vars2, print "appended", onesteplets Vars2 (Xs x) (E1 x) (E2 x) M1 M2 P R)).
+  :- (x:term -> (append Vars [x] (Vars2 x), onesteplets (Vars2 x) (Xs x) (E1 x) (E2 x) M1 M2 P R)).
 onesteplets Vars (body Xs) (body E1) (body E2) M1 M2 P R
-  :- print "onesteplets-body", onestepletassume Vars Xs E1 E2 M1 M2 P R.
+  :- onestepletassume Vars Xs E1 E2 M1 M2 P R.
 onestep S1 S2 M1 M2 P R
   :- not(refl.isunif M1), eq M1 (let Xs E1), eq L2 (let Xs E2), onestepletm [] S1 S2 Xs E1 E2 P R.
 onestepletm Vars E1 E2 (bind Xs) (bind M1) (bind M2) P R
-  :- (x:term -> (append Vars [x] Vars2, onestepletm Vars2 E1 E2 (Xs x) (M1 x) (M2 x) P R)).
+  :- (x:term -> (append Vars [x] (Vars2 x), onestepletm (Vars2 x) E1 E2 (Xs x) (M1 x) (M2 x) P R)).
 onestepletm Vars E1 E2 (body Xs) (body M1) (body M2) P R
   :- onestepletassume Vars Xs E1 E2 M1 M2 P R.
 onestepletassume (V :: Vars) (ncons X Xs) E1 E2 M1 M2 P R
-  :- print "onestepletassume", (codeof V X -> onestepletassume Vars Xs E1 E2 M1 M2 P R).
+  :- (codeof V X -> onestepletassume Vars Xs E1 E2 M1 M2 P R).
 onestepletassume [] nnil E1 E2 M1 M2 P (inlet R)
-  :- print "onestepletassume", onestep E1 E2 M1 M2 P R.
+  :- onestep E1 E2 M1 M2 P R.
 (* fallback, inline things *)
 onestep S1 S2 M M instudent inline
   :- not(refl.isunif S1), codeof S1 S2.

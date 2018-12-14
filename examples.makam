@@ -54,6 +54,8 @@ match' (fun f => lam (fun xs => case xs
        (fun f => app (k "map") [lam (fun x => app (k "+") [x, k "2"])]) R ?
 
 (* lets *)
+(*
 match' (fun f => (let (bind (fun g => body (ncons (k "replicate") nnil)))
                       (bind (fun g => body (lam (fun x => app (k "map") [app g [k "2"] ]))))))
        (fun f => (lam (fun x => app (k "map") [app (k "replicate") [k "2"] ]))) R ?
+*)
