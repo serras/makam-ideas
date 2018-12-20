@@ -139,10 +139,7 @@ patmatch   : list patr -> r.
 addpat     : existpat -> patr.
 droppat    : existpat -> patr.
 (* real rewritings *)
-npluszero : r.
-defn_id   : r.
-compose   : r.
-expandmap : r.
+knownfun  : string -> r.
 (* mistakes *)
 wrong_parens : r.
 
@@ -188,7 +185,7 @@ choosefromplace S M instudent S.
 choosefromplace S M inmodel   M.
 
 (* the real work is here *)
-onestep (app (k "+") [k "0", X]) X M M instudent npluszero.
+onestep (app (k "+") [k "0", X]) X M M instudent (knownfun "+/0").
 onestep C C
         (app (k "map") [F,Xs])
         (case Xs [ alt (patk "[]" patsnil) (body (k "[]"))
@@ -196,7 +193,7 @@ onestep C C
                        (bind (fun x => bind (fun xs => body (
                          app (k ":") [FX x xs, MeXs x xs]
                        ))))
-                 ]) inmodel expandmap
+                 ]) inmodel (knownfun "map")
   :- not(refl.isunif C), eq C (case _ _), (* do not refine if the case is not there *)
      me Me, (* obtain my name *)
      (x:term -> xs:term -> (betaReduceTop (app F [x]) (FX x xs), betaReduceTop (app Me [xs]) (MeXs x xs))).
@@ -206,11 +203,11 @@ onestep S S' M M instudent R :- onestepany S S' R.
 onestep S S M M' inmodel   R :- onestepany M M' R.
 
 (* a special one, you should never guess from these rules *)
-onestepany (app KId (X :: Rest)) (app X Rest) defn_id
+onestepany (app KId (X :: Rest)) (app X Rest) (knownfun "id")
   :- eq_nounif KId (k "id").
-onestepany (app KComp (F :: G :: X :: R)) (app F (app G [X] :: R)) compose
+onestepany (app KComp (F :: G :: X :: R)) (app F (app G [X] :: R)) (knownfun ".")
   :- eq_nounif KComp (k ".").
-onestepany (app (k "fromJust") [app (k "Just" [X])]) X.
+onestepany (app (k "fromJust") [app (k "Just") [X]]) X (knownfun "fromJust/Just").
 
 (* match the patterns in a case *)
 reorderaddmatches : list alt -> list alt -> list alt -> list patr -> prop.
